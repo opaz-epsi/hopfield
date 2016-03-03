@@ -1,0 +1,329 @@
+<html>
+	<head>
+		<script src="./jquery-1.10.2.min.js"></script>
+		<script>
+
+			var PIXEL_OFF = -1;
+			var PIXEL_ON = 1;
+			var PIXEL_PROCESSED_OFF = 2;
+			var PIXEL_PROCESSED_ON = 3;
+
+			var PIXEL_SIZE = 40; //pixels
+
+			var GRID_WIDTH = 0;
+			var GRID_HEIGHT = 0; 
+			var PIXEL_COUNT = 0; 
+
+			var LEARNING_RATE = 0.1;
+
+			var pixels = [];
+
+			var weightMatrix = [];
+
+			var mousePressed = false;
+			var mousePixelIndex = -1;
+			function init() {
+
+				var canvas = document.getElementById("canvas");
+				GRID_WIDTH = Math.floor(canvas.width/PIXEL_SIZE);	
+				GRID_HEIGHT = Math.floor(canvas.height/PIXEL_SIZE);	
+				PIXEL_COUNT = GRID_WIDTH * GRID_HEIGHT;
+
+				weightMatrix = zero_matrix(PIXEL_COUNT, PIXEL_COUNT);
+
+				resetCanvas();
+
+				canvas.addEventListener("click", function(e) {
+					var mousePoint = mouseCanvasPosition(e);
+					togglePixelAtPoint(mousePoint);
+					drawPixels();	
+				});
+
+				canvas.addEventListener("mousedown", function(e) {
+					mousePressed = true;
+				}, false);
+				canvas.addEventListener("mouseup", function(e) {
+					mousePressed = false;
+				}, false);		
+
+				canvas.addEventListener("mousemove", function(e) {
+					if(mousePressed) {
+						var mousePoint = mouseCanvasPosition(e);
+						var pixelIndex = pixelIndexAtPoint(e);
+						if(pixelIndex != mousePixelIndex) {
+							setPixelValueAtPoint(mousePoint, PIXEL_ON);
+							drawPixels();	
+							mousePixelIndex = pixelIndex;												
+						}
+					}
+				})
+			}
+
+			function learnClicked() {
+				//var learnedNumber = parseInt($("#inputNumber").val());
+				learn();
+				//processClicked();
+			}
+
+			function processClicked() {
+				var result = process();
+
+				for(row = 0; row < GRID_HEIGHT; row++) {
+					for(col = 0; col < GRID_WIDTH; col++) {
+						var pixelIndex = row * GRID_WIDTH + col;
+						var activated = (result[0][pixelIndex] > 0);
+						if(activated) {
+							if(pixels[col][row] == PIXEL_OFF) {
+								pixels[col][row] = PIXEL_PROCESSED_ON;
+							}
+						} else {
+							if(pixels[col][row] == PIXEL_ON) {
+								pixels[col][row] = PIXEL_PROCESSED_OFF;								
+							}
+						}
+					}
+				}
+				drawPixels();
+			}
+
+
+/* ------  */
+
+
+			function learn() {
+				var input = input_matrix();
+				matrix_log("input", input);
+				var learn = matrix_multiply(matrix_invert(input), input);
+				learn = matrix_scalar_multiply(learn, LEARNING_RATE);
+				weightMatrix = matrix_add(weightMatrix, learn);
+				matrix_log("weights", weightMatrix);
+			}
+
+			function process() {
+				//...
+				var cycles_left = 1000;
+				var input = zero_matrix(1, PIXEL_COUNT);
+				var output = input_matrix();
+				while(!matrix_equals(input, output) && (cycles_left > 0)) {
+					input = matrix_copy(output);
+					output = matrix_multiply(input, weightMatrix);
+					for(var i = 0; i < PIXEL_COUNT; i++) {
+						if(output[0][i] > 0) {
+							output[0][i] = PIXEL_ON;
+						} else {
+							output[0][i] = PIXEL_OFF;
+						}
+					}
+					matrix_log("output", output)
+					cycles_left--;
+				}
+
+
+				return output;
+			}
+
+
+			function input_matrix() {
+				var result = zero_matrix(1, PIXEL_COUNT);
+				for(row = 0; row < GRID_HEIGHT; row++) {
+					for(col = 0; col < GRID_WIDTH; col++) {
+						var pixelIndex = row * GRID_WIDTH + col;
+						result[0][pixelIndex] = pixels[col][row]  == PIXEL_ON? 1 : -1;
+					}
+				}
+
+				return result;
+			}
+
+/* ------  */
+
+
+			function mouseCanvasPosition(e) {
+        		var rect = canvas.getBoundingClientRect();
+        		return {
+          			x: e.clientX - rect.left,
+          			y: e.clientY - rect.top
+        		};
+      		}
+
+      		function pixelIndexAtPoint(point) {
+				var pixelIndex = -1;
+      			var x = Math.floor(point.x/PIXEL_SIZE);
+      			var y = Math.floor(point.y/PIXEL_SIZE);
+      			if(x < GRID_WIDTH && y < GRID_HEIGHT) {
+      				pixelIndex = y * GRID_WIDTH + x;
+      			}
+      			return pixelIndex;
+      		}
+
+      		function togglePixelAtPoint(point) {
+      			var x = Math.floor(point.x/PIXEL_SIZE);
+      			var y = Math.floor(point.y/PIXEL_SIZE);
+      			if(x < GRID_WIDTH && y < GRID_HEIGHT) {
+      				pixels[x][y] = pixels[x][y] == PIXEL_OFF ? PIXEL_ON : PIXEL_OFF;      				
+      			}
+      		}
+
+      		function setPixelValueAtPoint(point, value) {
+      			var x = Math.floor(point.x/PIXEL_SIZE);
+      			var y = Math.floor(point.y/PIXEL_SIZE);
+      			if(x < GRID_WIDTH && y < GRID_HEIGHT) {
+      				pixels[x][y] = value;      				
+      			}
+      		}
+
+      		function resetCanvas() {
+      			resetPixels();
+      			drawPixels();
+      		}
+
+      		function resetPixels() {      				
+			for(var x = 0; x < GRID_WIDTH; x++) {
+				pixels[x] = [];
+      			for(var y = 0; y < GRID_HEIGHT; y++) {						
+						pixels[x][y] = PIXEL_OFF;
+					}
+				}
+      		}
+
+			function drawPixels() {
+				var canvas = document.getElementById("canvas");
+				var context = canvas.getContext("2d");
+
+				for(var y = 0; y < GRID_HEIGHT; y++) {
+					for(var x = 0; x < GRID_WIDTH; x++) {
+						context.beginPath();
+						context.rect(x*PIXEL_SIZE, y*PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+
+						var pixelColor = '#555';
+						if(pixels[x][y] == PIXEL_ON) {
+							pixelColor = '#DDD';
+						} else if(pixels[x][y] == PIXEL_PROCESSED_OFF) {
+							pixelColor = '#D22';
+						} else if(pixels[x][y] == PIXEL_PROCESSED_ON) {
+							pixelColor = '#2D2';
+						}
+
+						context.fillStyle = pixelColor;
+						context.fill();
+						context.lineWidth = 1;
+						context.strokeStyle = '#000';
+						context.stroke();						
+					}
+				}
+			}
+
+			function zero_matrix(rows, cols) {
+				var result = [];
+				for(x = 0; x < rows; x++) {
+					result[x] = [];
+					for(y = 0; y < cols; y++) {
+						result[x][y] = 0;
+					}
+				}
+
+				return result;
+			}
+
+			function matrix_copy(m) {
+				var result = [];
+				for(x = 0; x < m.length; x++) {
+					result[x] = [];
+					for(y = 0; y < m[x].length; y++) {
+						result[x][y] = m[x][y];
+					}
+				}
+
+				return result;
+			}
+
+			function matrix_equals(m1, m2) {
+				var result = [];
+
+				if(m1.length != m2.length) {
+					return false;
+				}
+				if(m1[0].length != m2[0].length) {
+					return false;
+				}
+
+				for(x = 0; x < m1.length; x++) {
+					for(y = 0; y < m1[x].length; y++) {
+						if(m1[x][y] != m2[x][y]) {
+							return false;
+						}
+					}
+				}
+
+				return true;
+			}
+
+			function matrix_multiply(m1, m2) {
+				var result = zero_matrix(m1.length, m2[0].length);
+				for (var i = 0;i < m1.length;i++) {
+			        for (var j = 0;j < m2[0].length ;j++) {
+			            for(var k = 0;k < m1[i].length;k++) {
+			            	result[i][j] += m1[i][k] * m2[k][j];
+			            }				                
+			        }
+				}
+
+				return result;
+			}
+
+			function matrix_scalar_multiply(m, scalar) {
+				result = matrix_copy(m);
+				for(x = 0; x < m.length; x++) {
+					result[x] = [];
+					for(y = 0; y < m[x].length; y++) {
+						result[x][y] = m[x][y] * scalar;
+					}
+				}
+
+				return result;
+			}
+
+			function matrix_add(m1, m2) {
+				var result = matrix_copy(m1);
+				for(x = 0; x < m2.length; x++) {
+					for(y = 0; y < m2[x].length; y++) {
+						result[x][y] += m2[x][y];
+					}
+				}
+
+				return result;
+			}
+
+			function matrix_invert(m) {
+				var result = zero_matrix(m[0].length, m.length);
+				for(x = 0; x < m.length; x++) {
+					for(y = 0; y < m[x].length; y++) {
+						result[y][x] += m[x][y];
+					}
+				}				
+
+				return result;
+			}
+
+			function matrix_log(name, m) {
+				var lines = [];
+				for(x = 0; x < m.length; x++) {
+					lines[x] = "\t"+m[x].join(",");
+				}
+				console.log(name + " =\n" + lines.join("\n"));
+			}
+
+		</script>
+	</head>
+	<body onLoad="init();">
+	<canvas id="canvas" width="300" height="400" style="float:left">
+		alternate content
+	</canvas>
+	<div style="margin-left:50px;float:left">
+		<input type="button" value="Reset canvas" onclick="resetCanvas()"/><br/>
+		<br/>
+		<input type="button" value="Learn" onclick="learnClicked()"/><br/>
+		<input type="button" value="Process" onclick="processClicked()"/><br/>
+	</div>
+</body>
+</html>
